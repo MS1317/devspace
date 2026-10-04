@@ -373,6 +373,11 @@ test("open_workspace keeps lifecycle flags out of model output and preserves com
   assert.equal(card.workspaceReused, true);
   assert.equal(card.includeBootstrapContext, false);
   assert.ok(Array.isArray(card.agentsFiles));
+  assert.ok(
+    (card.agentsFiles as Array<Record<string, unknown>>).every(
+      (file) => typeof file.path === "string" && !("content" in file),
+    ),
+  );
   assert.ok(Array.isArray(card.availableAgentsFiles));
   assert.ok(Array.isArray(card.skills));
   assert.ok(Array.isArray(card.agentProviders));

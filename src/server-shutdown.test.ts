@@ -27,6 +27,59 @@ assert.equal(
 );
 await drainingShutdown;
 
+let idleCloseCalls = 0;
+let finishIdleAwareHttpClose: (() => void) | undefined;
+const idleAwareShutdown = shutdownHttpServer(
+  {
+    close(callback: (error?: Error) => void) {
+      finishIdleAwareHttpClose = () => callback();
+    },
+    closeIdleConnections() {
+      idleCloseCalls += 1;
+    },
+  },
+  async () => {
+    assert.equal(idleCloseCalls, 1, "idle connections close when draining starts");
+    finishIdleAwareHttpClose?.();
+  },
+);
+await idleAwareShutdown;
+assert.equal(idleCloseCalls, 2, "idle connections close again after application cleanup");
+
+let forcedCloseCalls = 0;
+let finishForcedHttpClose: (() => void) | undefined;
+await shutdownHttpServer(
+  {
+    close(callback: (error?: Error) => void) {
+      finishForcedHttpClose = () => callback();
+    },
+    closeIdleConnections() {},
+    closeAllConnections() {
+      forcedCloseCalls += 1;
+      finishForcedHttpClose?.();
+    },
+  },
+  async () => {},
+  { drainTimeoutMs: 10 },
+);
+assert.equal(forcedCloseCalls, 1, "a stuck active connection is forced closed only after the drain timeout");
+
+let unnecessaryForceCloseCalls = 0;
+await shutdownHttpServer(
+  {
+    close(callback: (error?: Error) => void) {
+      callback();
+    },
+    closeIdleConnections() {},
+    closeAllConnections() {
+      unnecessaryForceCloseCalls += 1;
+    },
+  },
+  async () => {},
+  { drainTimeoutMs: 10 },
+);
+assert.equal(unnecessaryForceCloseCalls, 0, "normally drained connections are never force closed");
+
 let finishApplicationClose: (() => void) | undefined;
 let shutdownResolved = false;
 
